@@ -126,10 +126,7 @@ if uploaded_files:
         else:
             clean_df = combined_df.copy()
 
-            if {'Current Value
-(USD)', 'Average Cost
-(USD)', 'Total Shares
-Held'}.issubset(clean_df.columns):
+            if {'Current Value\n(USD)', 'Average Cost\n(USD)', 'Total Shares\nHeld'}.issubset(clean_df.columns):
                 try:
                     clean_df = clean_df.rename(columns={
                         'Current Value
