@@ -6,12 +6,11 @@ from io import BytesIO
 from fpdf import FPDF
 import pdfplumber
 
-st.set_page_config(page_title="Portfolio Merger (Preserve All)", layout="centered")
-st.title("📊 Portfolio Merger with All Tickers Preserved")
+st.set_page_config(page_title="Portfolio Merger", layout="centered")
+st.title("📊 Portfolio Merger")
 
 st.markdown("""
-Uploads multiple portfolio files and merges them by ticker symbol — even if some rows have missing quantity or cost.
-
+Uploads multiple portfolio files and merges them
 ✅ Supports `.csv`, `.xlsx`, `.xls`, `.pdf`  
 ✅ Includes all tickers  
 ✅ Shows total invested and value (when possible)
