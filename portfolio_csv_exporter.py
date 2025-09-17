@@ -18,7 +18,7 @@ export_format = st.selectbox("Choose Output Format", ["Original Format (Combined
 uploaded_files = st.file_uploader("Upload Portfolio Files", type=["xlsx", "xls", "csv", "pdf"], accept_multiple_files=True)
 purchase_date = st.date_input("Select Purchase Date (for Seeking Alpha export)", date.today())
 
-# Utility: Generate PDF
+# ✅ FIXED PDF GENERATOR
 def generate_pdf(df):
     pdf = FPDF()
     pdf.add_page()
@@ -38,12 +38,10 @@ def generate_pdf(df):
             pdf.cell(col_widths[i % len(col_widths)], 10, str(value), border=1)
         pdf.ln()
 
-    output = BytesIO()
-    pdf.output(output)
-    output.seek(0)
+    pdf_output_bytes = pdf.output(dest='S').encode('latin1')
+    output = BytesIO(pdf_output_bytes)
     return output
 
-# Utility: Combine and optionally transform
 if uploaded_files:
     all_data = []
 
