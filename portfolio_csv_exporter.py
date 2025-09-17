@@ -125,16 +125,13 @@ if uploaded_files:
 
         else:
             clean_df = combined_df.copy()
-
-            if {'Current Value\n(USD)', 'Average Cost\n(USD)', 'Total Shares\nHeld'}.issubset(clean_df.columns):
+            required_columns = {"Current Value\n(USD)", "Average Cost\n(USD)", "Total Shares\nHeld"}
+            if required_columns.issubset(clean_df.columns):
                 try:
                     clean_df = clean_df.rename(columns={
-                        'Current Value
-(USD)': 'value',
-                        'Average Cost
-(USD)': 'cost',
-                        'Total Shares
-Held': 'quantity'
+                        "Current Value\n(USD)": "value",
+                        "Average Cost\n(USD)": "cost",
+                        "Total Shares\nHeld": "quantity"
                     })
                     clean_df[["value", "cost", "quantity"]] = clean_df[["value", "cost", "quantity"]].astype(float)
                     total_value = clean_df["value"].sum()
