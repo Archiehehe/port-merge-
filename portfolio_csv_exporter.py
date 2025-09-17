@@ -8,10 +8,12 @@ import pdfplumber
 
 st.set_page_config(page_title="Portfolio Combiner & Exporter", layout="centered")
 st.title("📈 Portfolio Combiner & Exporter")
-st.markdown("""
-Upload multiple portfolio files and get a combined output in **Excel**, **CSV**, or **PDF**.
 
-Supports `.xlsx`, `.xls`, `.csv`, and `.pdf` formats.
+st.markdown("""Upload `.csv`, `.xlsx`, `.xls`, or `.pdf` files to combine portfolios.
+
+Choose to export in:
+- **Original Format**: Keeps all available columns
+- **Seeking Alpha Format**: Transforms into `symbol, quantity, cost, date`
 """)
 
 export_format = st.selectbox("Choose Output Format", ["Original Format (Combined)", "Seeking Alpha Format"])
@@ -29,7 +31,7 @@ def generate_pdf(df):
     headers = df.columns.tolist()
 
     for i, header in enumerate(headers):
-        pdf.cell(col_widths[i % len(col_widths)], 10, header, border=1)
+        pdf.cell(col_widths[i % len(col_widths)], 10, str(header), border=1)
     pdf.ln()
 
     for _, row in df.iterrows():
@@ -38,101 +40,123 @@ def generate_pdf(df):
         pdf.ln()
 
     pdf_output_bytes = pdf.output(dest='S').encode('latin1')
-    output = BytesIO(pdf_output_bytes)
-    return output
+    return BytesIO(pdf_output_bytes)
 
 if uploaded_files:
-    all_data = []
+    valid_dfs = []
+    skipped = []
 
     for file in uploaded_files:
         try:
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
-                all_data.append(df)
             elif file.name.endswith(".pdf"):
                 with pdfplumber.open(file) as pdf:
+                    all_tables = []
                     for page in pdf.pages:
                         table = page.extract_table()
                         if table:
                             temp_df = pd.DataFrame(table[1:], columns=table[0])
-                            all_data.append(temp_df)
+                            all_tables.append(temp_df)
+                    df = pd.concat(all_tables, ignore_index=True) if all_tables else pd.DataFrame()
             else:
                 df = pd.read_excel(file)
-                all_data.append(df)
-        except Exception as e:
-            st.error(f"❌ Error reading {file.name}: {e}")
 
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
+            if not df.empty:
+                df.columns = df.columns.map(lambda c: c.strip())
+                valid_dfs.append(df)
+            else:
+                skipped.append(file.name)
+        except Exception as e:
+            skipped.append(file.name)
+
+    if skipped:
+        st.warning(f"⚠️ Skipped files due to errors or empty data: {', '.join(skipped)}")
+
+    if valid_dfs:
+        combined_df = pd.concat(valid_dfs, ignore_index=True)
         combined_df = combined_df.loc[:, ~combined_df.columns.str.contains('^Unnamed')]
 
         st.markdown("### 📊 Combined Portfolio Preview")
-        st.dataframe(combined_df, use_container_width=True)
+        st.dataframe(combined_df.head(50), use_container_width=True)
 
         if export_format == "Seeking Alpha Format":
-            try:
-                df_clean = combined_df[["Ticker", "Total Shares Held", "Average Cost (USD)"]].rename(columns={
-                    "Ticker": "symbol",
-                    "Total Shares Held": "quantity",
-                    "Average Cost (USD)": "cost"
-                })
-                grouped_df = df_clean.groupby("symbol").apply(
-                    lambda x: pd.Series({
-                        "quantity": x["quantity"].astype(float).sum(),
-                        "cost": (x["quantity"].astype(float) * x["cost"].astype(float)).sum() / x["quantity"].astype(float).sum()
+            required_cols = ["Ticker", "Total Shares Held", "Average Cost (USD)"]
+            if all(col in combined_df.columns for col in required_cols):
+                try:
+                    df_clean = combined_df[required_cols].rename(columns={
+                        "Ticker": "symbol",
+                        "Total Shares Held": "quantity",
+                        "Average Cost (USD)": "cost"
                     })
-                ).reset_index()
-                grouped_df["date"] = purchase_date.strftime("%Y-%m-%d")
-                final_df = grouped_df[["symbol", "quantity", "cost", "date"]]
 
-                st.success("✅ Seeking Alpha format ready!")
+                    df_clean = df_clean.dropna(subset=["symbol", "quantity", "cost"])
+                    df_clean["quantity"] = df_clean["quantity"].astype(float)
+                    df_clean["cost"] = df_clean["cost"].astype(float)
 
-                csv = final_df.to_csv(index=False).encode("utf-8")
-                st.download_button("⬇️ Download as CSV", data=csv, file_name="seeking_alpha_portfolio.csv", mime="text/csv")
+                    grouped_df = df_clean.groupby("symbol").apply(
+                        lambda x: pd.Series({
+                            "quantity": x["quantity"].sum(),
+                            "cost": (x["quantity"] * x["cost"]).sum() / x["quantity"].sum()
+                        })
+                    ).reset_index()
 
-                excel = BytesIO()
-                final_df.to_excel(excel, index=False)
-                st.download_button("⬇️ Download as Excel", data=excel.getvalue(), file_name="seeking_alpha_portfolio.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    grouped_df["date"] = purchase_date.strftime("%Y-%m-%d")
+                    final_df = grouped_df[["symbol", "quantity", "cost", "date"]]
 
-                pdf_file = generate_pdf(final_df)
-                st.download_button("⬇️ Download as PDF", data=pdf_file, file_name="seeking_alpha_portfolio.pdf", mime="application/pdf")
+                    st.success("✅ Seeking Alpha format ready!")
 
-            except Exception as e:
-                st.error(f"⚠️ Failed to transform into Seeking Alpha format: {e}")
+                    st.download_button("⬇️ Download CSV", final_df.to_csv(index=False).encode("utf-8"),
+                                       "seeking_alpha_portfolio.csv", "text/csv")
+
+                    excel = BytesIO()
+                    final_df.to_excel(excel, index=False)
+                    st.download_button("⬇️ Download Excel", excel.getvalue(),
+                                       "seeking_alpha_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+                    pdf_file = generate_pdf(final_df)
+                    st.download_button("⬇️ Download PDF", pdf_file,
+                                       "seeking_alpha_portfolio.pdf", "application/pdf")
+
+                except Exception as e:
+                    st.error(f"❌ Failed to create Seeking Alpha format: {e}")
+            else:
+                st.error("❌ One or more required columns missing for Seeking Alpha format.")
 
         else:
-            try:
-                expected_cols = {
-                    "Ticker": "symbol",
-                    "Total Shares\nHeld": "quantity",
-                    "Current Price\n(USD)": "price",
-                    "Current Value\n(USD)": "value",
-                    "Average Cost\n(USD)": "cost"
-                }
-                usable_cols = {col: name for col, name in expected_cols.items() if col in combined_df.columns}
-                clean_df = combined_df[list(usable_cols.keys())].rename(columns=usable_cols)
-                clean_df = clean_df.dropna(subset=["symbol"])
+            clean_df = combined_df.copy()
 
-                st.success("✅ Cleaned and combined data ready")
+            if {'Current Value
+(USD)', 'Average Cost
+(USD)', 'Total Shares
+Held'}.issubset(clean_df.columns):
+                try:
+                    clean_df = clean_df.rename(columns={
+                        'Current Value
+(USD)': 'value',
+                        'Average Cost
+(USD)': 'cost',
+                        'Total Shares
+Held': 'quantity'
+                    })
+                    clean_df[["value", "cost", "quantity"]] = clean_df[["value", "cost", "quantity"]].astype(float)
+                    total_value = clean_df["value"].sum()
+                    invested = (clean_df["cost"] * clean_df["quantity"]).sum()
+                    pnl = total_value - invested
+                    pnl_pct = (pnl / invested) * 100 if invested else 0
 
-                if {'value', 'cost', 'quantity'}.issubset(clean_df.columns):
-                    clean_df = clean_df.astype({"value": float, "cost": float, "quantity": float})
-                    invested = (clean_df["quantity"] * clean_df["cost"]).sum()
-                    current = clean_df["value"].sum()
-                    pnl = current - invested
-                    pnl_pct = (pnl / invested) * 100 if invested != 0 else 0
+                    st.info(f"**💰 Total Value:** ${total_value:,.2f}  |  **📈 P&L:** ${pnl:,.2f} ({pnl_pct:.2f}%)")
+                except Exception:
+                    st.warning("⚠️ Could not calculate P&L due to data format.")
 
-                    st.info(f"**💰 Total Value:** ${current:,.2f}  |  **📈 All-Time P&L:** ${pnl:,.2f} ({pnl_pct:.2f}%)")
+            st.download_button("⬇️ Download CSV", clean_df.to_csv(index=False).encode("utf-8"),
+                               "combined_portfolio.csv", "text/csv")
 
-                csv = clean_df.to_csv(index=False).encode("utf-8")
-                st.download_button("⬇️ Download as CSV", data=csv, file_name="combined_portfolio.csv", mime="text/csv")
+            excel = BytesIO()
+            clean_df.to_excel(excel, index=False)
+            st.download_button("⬇️ Download Excel", excel.getvalue(),
+                               "combined_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-                excel = BytesIO()
-                clean_df.to_excel(excel, index=False)
-                st.download_button("⬇️ Download as Excel", data=excel.getvalue(), file_name="combined_portfolio.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-                pdf_file = generate_pdf(clean_df)
-                st.download_button("⬇️ Download as PDF", data=pdf_file, file_name="combined_portfolio.pdf", mime="application/pdf")
-
-            except Exception as e:
-                st.error(f"⚠️ Failed to process original format output: {e}")
+            pdf_file = generate_pdf(clean_df)
+            st.download_button("⬇️ Download PDF", pdf_file,
+                               "combined_portfolio.pdf", "application/pdf")
