@@ -18,7 +18,6 @@ export_format = st.selectbox("Choose Output Format", ["Original Format (Combined
 uploaded_files = st.file_uploader("Upload Portfolio Files", type=["xlsx", "xls", "csv", "pdf"], accept_multiple_files=True)
 purchase_date = st.date_input("Select Purchase Date (for Seeking Alpha export)", date.today())
 
-# ✅ FIXED PDF GENERATOR
 def generate_pdf(df):
     pdf = FPDF()
     pdf.add_page()
@@ -65,6 +64,7 @@ if uploaded_files:
 
     if all_data:
         combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df = combined_df.loc[:, ~combined_df.columns.str.contains('^Unnamed')]
 
         st.markdown("### 📊 Combined Portfolio Preview")
         st.dataframe(combined_df, use_container_width=True)
@@ -78,8 +78,8 @@ if uploaded_files:
                 })
                 grouped_df = df_clean.groupby("symbol").apply(
                     lambda x: pd.Series({
-                        "quantity": x["quantity"].sum(),
-                        "cost": (x["quantity"] * x["cost"]).sum() / x["quantity"].sum()
+                        "quantity": x["quantity"].astype(float).sum(),
+                        "cost": (x["quantity"].astype(float) * x["cost"].astype(float)).sum() / x["quantity"].astype(float).sum()
                     })
                 ).reset_index()
                 grouped_df["date"] = purchase_date.strftime("%Y-%m-%d")
@@ -101,14 +101,42 @@ if uploaded_files:
                 st.error(f"⚠️ Failed to transform into Seeking Alpha format: {e}")
 
         else:
-            st.success("✅ Combined data ready in original format")
+            try:
+                expected_cols = {
+                    "Ticker": "symbol",
+                    "Total Shares
+Held": "quantity",
+                    "Current Price
+(USD)": "price",
+                    "Current Value
+(USD)": "value",
+                    "Average Cost
+(USD)": "cost"
+                }
+                usable_cols = {col: name for col, name in expected_cols.items() if col in combined_df.columns}
+                clean_df = combined_df[list(usable_cols.keys())].rename(columns=usable_cols)
+                clean_df = clean_df.dropna(subset=["symbol"])
 
-            csv = combined_df.to_csv(index=False).encode("utf-8")
-            st.download_button("⬇️ Download as CSV", data=csv, file_name="combined_portfolio.csv", mime="text/csv")
+                st.success("✅ Cleaned and combined data ready")
 
-            excel = BytesIO()
-            combined_df.to_excel(excel, index=False)
-            st.download_button("⬇️ Download as Excel", data=excel.getvalue(), file_name="combined_portfolio.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                if {'value', 'cost', 'quantity'}.issubset(clean_df.columns):
+                    clean_df = clean_df.astype({"value": float, "cost": float, "quantity": float})
+                    invested = (clean_df["quantity"] * clean_df["cost"]).sum()
+                    current = clean_df["value"].sum()
+                    pnl = current - invested
+                    pnl_pct = (pnl / invested) * 100 if invested != 0 else 0
 
-            pdf_file = generate_pdf(combined_df)
-            st.download_button("⬇️ Download as PDF", data=pdf_file, file_name="combined_portfolio.pdf", mime="application/pdf")
+                    st.info(f"**💰 Total Value:** ${current:,.2f}  |  **📈 All-Time P&L:** ${pnl:,.2f} ({pnl_pct:.2f}%)")
+
+                csv = clean_df.to_csv(index=False).encode("utf-8")
+                st.download_button("⬇️ Download as CSV", data=csv, file_name="combined_portfolio.csv", mime="text/csv")
+
+                excel = BytesIO()
+                clean_df.to_excel(excel, index=False)
+                st.download_button("⬇️ Download as Excel", data=excel.getvalue(), file_name="combined_portfolio.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+                pdf_file = generate_pdf(clean_df)
+                st.download_button("⬇️ Download as PDF", data=pdf_file, file_name="combined_portfolio.pdf", mime="application/pdf")
+
+            except Exception as e:
+                st.error(f"⚠️ Failed to process original format output: {e}")
