@@ -6,9 +6,16 @@ from io import BytesIO
 from fpdf import FPDF
 import pdfplumber
 
-st.set_page_config(page_title="Portfolio Merger with P&L", layout="centered")
-st.title("📊 Portfolio Merger & P&L Tracker")
-st.markdown("Upload multiple portfolio files to merge holdings by symbol and track total value and P&L.")
+st.set_page_config(page_title="Portfolio Merger (Preserve All)", layout="centered")
+st.title("📊 Portfolio Merger with All Tickers Preserved")
+
+st.markdown("""
+Uploads multiple portfolio files and merges them by ticker symbol — even if some rows have missing quantity or cost.
+
+✅ Supports `.csv`, `.xlsx`, `.xls`, `.pdf`  
+✅ Includes all tickers  
+✅ Shows total invested and value (when possible)
+""")
 
 export_format = st.selectbox("Output Format", ["Seeking Alpha Format", "Original Format (Cleaned)"])
 uploaded_files = st.file_uploader("Upload Portfolio Files", type=["xlsx", "xls", "csv", "pdf"], accept_multiple_files=True)
@@ -21,16 +28,14 @@ def generate_pdf(df):
     pdf.cell(200, 10, txt="Merged Portfolio", ln=True, align='C')
     pdf.ln(10)
     headers = df.columns.tolist()
-    col_widths = [40, 40, 40, 40]
     for header in headers:
-        pdf.cell(col_widths[0], 10, header, border=1)
+        pdf.cell(40, 10, str(header), border=1)
     pdf.ln()
     for _, row in df.iterrows():
-        for value in row:
-            pdf.cell(col_widths[0], 10, str(value), border=1)
+        for val in row:
+            pdf.cell(40, 10, str(val), border=1)
         pdf.ln()
-    pdf_output_bytes = pdf.output(dest='S').encode('latin1')
-    return BytesIO(pdf_output_bytes)
+    return BytesIO(pdf.output(dest='S').encode('latin1'))
 
 def extract_data(df):
     rename_map = {}
@@ -45,16 +50,14 @@ def extract_data(df):
         elif 'price' in col_l and 'current' in col_l:
             rename_map[col] = 'price'
     df = df.rename(columns=rename_map)
-    if {'symbol', 'quantity', 'cost'}.issubset(df.columns):
-        df = df[['symbol', 'quantity', 'cost'] + (['price'] if 'price' in df.columns else [])].dropna()
-        df['quantity'] = pd.to_numeric(df['quantity'], errors='coerce')
-        df['cost'] = pd.to_numeric(df['cost'], errors='coerce')
-        if 'price' in df.columns:
-            df['price'] = pd.to_numeric(df['price'], errors='coerce')
-        return df.dropna()
-    return None
+    usable = ['symbol'] + [col for col in ['quantity', 'cost', 'price'] if col in df.columns]
+    df = df[usable]
+    for col in ['quantity', 'cost', 'price']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    return df
 
-final_data = []
+dataframes = []
 
 if uploaded_files:
     for file in uploaded_files:
@@ -65,58 +68,51 @@ if uploaded_files:
                 tables = []
                 with pdfplumber.open(file) as pdf:
                     for page in pdf.pages:
-                        tbl = page.extract_table()
-                        if tbl:
-                            tables.append(pd.DataFrame(tbl[1:], columns=tbl[0]))
+                        table = page.extract_table()
+                        if table:
+                            tables.append(pd.DataFrame(table[1:], columns=table[0]))
                 raw = pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
             else:
                 raw = pd.read_excel(file)
             df = extract_data(raw)
-            if df is not None:
-                final_data.append(df)
-            else:
-                st.warning(f"⚠️ Skipped file (columns not found): {file.name}")
+            dataframes.append(df)
         except Exception as e:
-            st.error(f"❌ Error reading {file.name}: {e}")
+            st.warning(f"⚠️ Could not load {file.name}: {e}")
 
-    if final_data:
-        merged = pd.concat(final_data)
-        merged = merged.groupby('symbol').apply(
-            lambda x: pd.Series({
-                'quantity': x['quantity'].sum(),
-                'cost': (x['quantity'] * x['cost']).sum() / x['quantity'].sum(),
-                'price': x['price'].mean() if 'price' in x else None
-            })
-        ).reset_index()
+    if dataframes:
+        full_df = pd.concat(dataframes, ignore_index=True)
+        merged = full_df.groupby('symbol').agg({
+            'quantity': 'sum',
+            'cost': lambda x: (x * full_df.loc[x.index, 'quantity']).sum() / full_df.loc[x.index, 'quantity'].sum() if x.notna().any() and full_df.loc[x.index, 'quantity'].notna().any() else None,
+            'price': 'mean' if 'price' in full_df.columns else 'first'
+        }).reset_index()
 
         merged['invested'] = merged['quantity'] * merged['cost']
-        if 'price' in merged.columns and merged['price'].notna().any():
+        if 'price' in merged.columns:
             merged['value'] = merged['quantity'] * merged['price']
-            invested_total = merged['invested'].sum()
-            current_value = merged['value'].sum()
-            pnl = current_value - invested_total
-            pnl_pct = (pnl / invested_total * 100) if invested_total else 0
-            st.info(f"💰 Total Value: ${current_value:,.2f} | Invested: ${invested_total:,.2f} | P&L: ${pnl:,.2f} ({pnl_pct:.2f}%)")
 
-        columns = ['symbol', 'quantity', 'cost']
+        # Show P&L if possible
+        if 'value' in merged and merged['value'].notna().any():
+            total_val = merged['value'].sum()
+            total_inv = merged['invested'].sum()
+            pnl = total_val - total_inv
+            pnl_pct = pnl / total_inv * 100 if total_inv else 0
+            st.info(f"💰 Total Value: ${total_val:,.2f} | Invested: ${total_inv:,.2f} | P&L: ${pnl:,.2f} ({pnl_pct:.2f}%)")
+
+        # Output columns
+        base_cols = ['symbol', 'quantity', 'cost']
         if export_format == "Seeking Alpha Format":
             merged['date'] = purchase_date.strftime('%Y-%m-%d')
-            columns += ['date']
-        elif 'invested' in merged:
-            columns += ['invested']
-        if 'value' in merged:
-            columns += ['value']
+            out_cols = base_cols + ['date']
+        else:
+            out_cols = base_cols + ['invested']
+            if 'value' in merged:
+                out_cols.append('value')
 
-        output_df = merged[columns]
-        st.dataframe(output_df, use_container_width=True)
+        output = merged[out_cols]
+        st.dataframe(output, use_container_width=True)
 
-        st.download_button("⬇️ Download CSV", output_df.to_csv(index=False).encode('utf-8'),
-                           "merged_portfolio.csv", "text/csv")
-
-        excel = BytesIO()
-        output_df.to_excel(excel, index=False)
-        st.download_button("⬇️ Download Excel", excel.getvalue(),
-                           "merged_portfolio.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-        pdf_file = generate_pdf(output_df)
-        st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", "application/pdf")
+        st.download_button("⬇️ CSV", output.to_csv(index=False).encode("utf-8"), "merged_preserved.csv", "text/csv")
+        xlsx = BytesIO(); output.to_excel(xlsx, index=False)
+        st.download_button("⬇️ Excel", xlsx.getvalue(), "merged_preserved.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.download_button("⬇️ PDF", generate_pdf(output), "merged_preserved.pdf", "application/pdf")
