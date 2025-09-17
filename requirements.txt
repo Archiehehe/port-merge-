@@ -1,3 +1,5 @@
 streamlit
 pandas
 openpyxl
+pdfplumber
+fpdf
