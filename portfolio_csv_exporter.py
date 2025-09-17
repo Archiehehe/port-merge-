@@ -91,7 +91,17 @@ if uploaded_files:
         else:
             columns = ['symbol', 'quantity', 'cost']
 
-        output_df = merged[columns]
+        
+# Add total value and invested columns
+merged["invested"] = merged["quantity"] * merged["cost"]
+if "price" in merged.columns:
+    merged["value"] = merged["quantity"] * merged["price"]
+    pnl_total = merged["value"].sum() - merged["invested"].sum()
+    pnl_pct = (pnl_total / merged["invested"].sum()) * 100 if merged["invested"].sum() else 0
+    st.info(f"💰 Total Value: ${merged['value'].sum():,.2f} | Invested: ${merged['invested'].sum():,.2f} | P&L: ${pnl_total:,.2f} ({pnl_pct:.2f}%)")
+
+output_df = merged[columns + (["invested"] if "invested" in merged else [])]
+
 
         st.dataframe(output_df, use_container_width=True)
 
