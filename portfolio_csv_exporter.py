@@ -104,14 +104,10 @@ if uploaded_files:
             try:
                 expected_cols = {
                     "Ticker": "symbol",
-                    "Total Shares
-Held": "quantity",
-                    "Current Price
-(USD)": "price",
-                    "Current Value
-(USD)": "value",
-                    "Average Cost
-(USD)": "cost"
+                    "Total Shares\nHeld": "quantity",
+                    "Current Price\n(USD)": "price",
+                    "Current Value\n(USD)": "value",
+                    "Average Cost\n(USD)": "cost"
                 }
                 usable_cols = {col: name for col, name in expected_cols.items() if col in combined_df.columns}
                 clean_df = combined_df[list(usable_cols.keys())].rename(columns=usable_cols)
