@@ -111,7 +111,8 @@ st.info(f"💰 **Value:** ${total:,.2f} | 🧾 **Invested:** ${invested:,.2f} | 
         with open('summary_temp.png', 'wb') as f_img:
             f_img.write(img.read())
         pdf_file = pdf.output_pdf(combined)
-        st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", mime="application/pdf")
+                pdf_name = f"archie_portfolio_{date.today()}.pdf"
+        st.download_button("⬇️ Download PDF", pdf_file, pdf_name, mime="application/pdf")
 
         st.download_button("⬇️ Download CSV", combined.to_csv(index=False).encode("utf-8"), "merged_portfolio.csv", mime="text/csv")
 
