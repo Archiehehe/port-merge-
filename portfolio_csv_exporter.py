@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 import pdfplumber
 
-st.set_page_config(page_title="Portfolio Merger - PDF Fixed", layout="centered")
-st.title("📊 Portfolio Merger (Strict PDF Parser)")
+st.set_page_config(page_title="Portfolio Merger - Final PDF Fix", layout="centered")
+st.title("📊 Portfolio Merger (Final Fix for Vested PDF)")
 
 export_format = st.selectbox("Output Format", ["Seeking Alpha Format", "Original Format (Cleaned)"])
 uploaded_files = st.file_uploader("Upload Portfolio Files", type=["xlsx", "xls", "csv", "pdf"], accept_multiple_files=True)
@@ -69,7 +69,10 @@ def generate_summary_image(df):
 def extract_vested_pdf(path):
     with pdfplumber.open(path) as pdf:
         table = pdf.pages[0].extract_table()
-        df = pd.DataFrame(table[1:], columns=table[0])
+        headers = table[0]
+        if "Total Shares" in headers and "Held" in headers:
+            headers = [h if h != "Total Shares" else "Total Shares Held" for h in headers if h != "Held"]
+        df = pd.DataFrame(table[1:], columns=headers)
     df.columns = df.columns.str.strip()
     df = df.rename(columns={
         "Ticker": "symbol",
@@ -139,7 +142,10 @@ if uploaded_files:
 
         st.dataframe(combined[output_cols], use_container_width=True)
 
-        st.download_button("⬇️ CSV", combined[output_cols].to_csv(index=False).encode("utf-8"), "pdf_fixed_merged.csv")
-        xls = BytesIO(); combined[output_cols].to_excel(xls, index=False); st.download_button("⬇️ Excel", xls.getvalue(), "pdf_fixed_merged.xlsx")
-        st.download_button("⬇️ PDF", generate_pdf(combined[output_cols]), "pdf_fixed_merged.pdf", "application/pdf")
-        st.download_button("📸 Summary Image", generate_summary_image(combined), "portfolio_summary_fixed.png", "image/png")
+        st.download_button("⬇️ CSV", combined[output_cols].to_csv(index=False).encode("utf-8"), "pdf_final_merged.csv")
+        xls = BytesIO(); combined[output_cols].to_excel(xls, index=False); st.download_button("⬇️ Excel", xls.getvalue(), "pdf_final_merged.xlsx")
+        st.download_button("⬇️ PDF", generate_pdf(combined[output_cols]), "pdf_final_merged.pdf", "application/pdf")
+        st.download_button("📸 Summary Image", generate_summary_image(combined), "portfolio_summary_final.png", "image/png")
+        pnl = combined["value"].sum() - combined["invested"].sum()
+        pnl_pct = pnl / combined["invested"].sum() * 100 if combined["invested"].sum() else 0
+        st.caption(f"💰 Total Value: ${combined['value'].sum():,.2f} | 📈 P&L: ${pnl:+,.2f} ({pnl_pct:.2f}%)")
