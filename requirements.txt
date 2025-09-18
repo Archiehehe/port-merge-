@@ -1,6 +1,6 @@
 streamlit
 pandas
 openpyxl
-pdfplumber
 fpdf
 matplotlib
+Pillow
