@@ -40,10 +40,6 @@ class PDFReport(FPDF):
         total = df["value"].sum()
         invested = df["invested"].sum()
         self.summary(total, invested)
-        summary_img = Image.open('summary_temp.png')
-        summary_img.save('summary_temp_converted.jpg')
-        self.image('summary_temp_converted.jpg', x=30, w=150)
-
         self.table(df)
         buf = BytesIO()
         pdf_bytes = self.output(dest='S').encode('latin1')
@@ -99,20 +95,9 @@ if uploaded_files:
 
         st.dataframe(combined, use_container_width=True)
 
-# Live P&L preview
-total = combined["value"].sum()
-invested = combined["invested"].sum()
-pnl = total - invested
-pnl_pct = (pnl / invested * 100) if invested else 0
-st.info(f"💰 **Value:** ${total:,.2f} | 🧾 **Invested:** ${invested:,.2f} | 📈 **P&L:** ${pnl:+,.2f} ({pnl_pct:.2f}%)")
-
-                pdf = PDFReport()
-        img = generate_summary_image()
-        with open('summary_temp.png', 'wb') as f_img:
-            f_img.write(img.read())
+        pdf = PDFReport()
         pdf_file = pdf.output_pdf(combined)
-                pdf_name = f"archie_portfolio_{date.today()}.pdf"
-        st.download_button("⬇️ Download PDF", pdf_file, pdf_name, mime="application/pdf")
+        st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", mime="application/pdf")
 
         st.download_button("⬇️ Download CSV", combined.to_csv(index=False).encode("utf-8"), "merged_portfolio.csv", mime="text/csv")
 
