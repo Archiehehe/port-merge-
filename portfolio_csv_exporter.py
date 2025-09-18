@@ -161,7 +161,7 @@ if uploaded_files:
         st.image("summary_temp.png", caption="📊 Portfolio Summary", use_container_width=True)
 
         # 📄 Generate and export PDF with image
-        Image.open("summary_temp.png").save("summary_temp_converted.jpg")
+        Image.open("summary_temp.png").convert("RGB").save("summary_temp_converted.jpg")
         pdf = PDFReport()
         pdf_file = pdf.output_pdf(combined, "summary_temp_converted.jpg")
         pdf_name = f"archie_portfolio_{date.today()}.pdf"
