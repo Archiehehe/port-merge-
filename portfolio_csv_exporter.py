@@ -16,7 +16,7 @@ class PDFReport(FPDF):
         self.set_font("Arial", "B", 14)
         self.cell(0, 10, "Merged Portfolio Report", ln=True, align="C")
         self.ln(5)
- 
+
     def table(self, data):
         self.set_font("Arial", size=10)
         col_width = (self.w - 2 * self.l_margin) / len(data.columns)
@@ -42,9 +42,8 @@ class PDFReport(FPDF):
         self.summary(total, invested)
         self.table(df)
         buf = BytesIO()
-        self.output(buf)
-        buf.seek(0)
-        return buf
+        pdf_bytes = self.output(dest='S').encode('latin1')
+        return BytesIO(pdf_bytes)
 
 def extract_generic_data(df):
     df = df.rename(columns=lambda c: c.strip().lower())
