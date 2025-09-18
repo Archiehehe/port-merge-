@@ -95,7 +95,7 @@ if uploaded_files:
 
         st.dataframe(combined, use_container_width=True)
 
-# 📘 Live summary box
+# 📘 Show P&L summary box
 total = combined["value"].sum()
 invested = combined["invested"].sum()
 pnl = total - invested
@@ -107,13 +107,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as path_effects
 from PIL import Image
 
-def generate_summary_image():
-    combined_sorted = combined.sort_values("value", ascending=False)
-    top = combined_sorted.head(5)
-    other_total = combined_sorted["value"].sum() - top["value"].sum()
+def generate_summary_image(data, total, pnl, pnl_pct):
+    top = data.sort_values("value", ascending=False).head(5)
+    other_total = data["value"].sum() - top["value"].sum()
     if other_total > 0:
-        other_row = pd.DataFrame([{"symbol": "Other", "value": other_total}])
-        top = pd.concat([top, other_row], ignore_index=True)
+        top = pd.concat([top, pd.DataFrame([{"symbol": "Other", "value": other_total}])], ignore_index=True)
     labels = top["symbol"]
     sizes = top["value"]
     fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
@@ -140,13 +138,13 @@ def generate_summary_image():
     buf.seek(0)
     return buf
 
-# Save image and preview
-img_buf = generate_summary_image()
+# Generate image
+img_buf = generate_summary_image(combined, total, pnl, pnl_pct)
 with open("summary_temp.png", "wb") as f_img:
     f_img.write(img_buf.read())
 st.image("summary_temp.png", caption="📊 Portfolio Summary", use_container_width=True)
 
-# Embed in PDF
+# Embed and export PDF
 img = Image.open("summary_temp.png").convert("RGB")
 img.save("summary_temp_converted.jpg")
 pdf = PDFReport()
