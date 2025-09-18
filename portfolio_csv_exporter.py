@@ -16,10 +16,10 @@ class PDFReport(FPDF):
         self.set_font("Arial", "B", 14)
         self.cell(0, 10, "Merged Portfolio Report", ln=True, align="C")
         self.ln(5)
-
+ 
     def table(self, data):
         self.set_font("Arial", size=10)
-        col_width = self.epw / len(data.columns)
+        col_width = (self.w - 2 * self.l_margin) / len(data.columns)
         for col in data.columns:
             self.cell(col_width, 10, col, border=1)
         self.ln()
