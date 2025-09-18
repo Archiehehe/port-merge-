@@ -128,7 +128,11 @@ if uploaded_files:
 
         # 📸 Generate and preview summary image
         def generate_summary_image():
-            top = combined.sort_values("value", ascending=False).head(5)
+            combined_sorted = combined.sort_values("value", ascending=False)
+top = combined_sorted.head(5)
+other_total = combined_sorted["value"].sum() - top["value"].sum()
+if other_total > 0:
+    top = pd.concat([top, pd.DataFrame([{"symbol": "Other", "value": other_total}])], ignore_index=True)
             labels = top["symbol"]
             sizes = top["value"]
             fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
