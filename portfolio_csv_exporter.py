@@ -106,9 +106,10 @@ pnl = total - invested
 pnl_pct = (pnl / invested * 100) if invested else 0
 st.info(f"💰 **Value:** ${total:,.2f} | 🧾 **Invested:** ${invested:,.2f} | 📈 **P&L:** ${pnl:+,.2f} ({pnl_pct:.2f}%)")
 
-        pdf = PDFReport()
+                pdf = PDFReport()
         img = generate_summary_image()
-        with open('summary_temp.png', 'wb') as f_img: f_img.write(img.read())
+        with open('summary_temp.png', 'wb') as f_img:
+            f_img.write(img.read())
         pdf_file = pdf.output_pdf(combined)
         st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", mime="application/pdf")
 
