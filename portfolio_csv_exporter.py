@@ -9,6 +9,28 @@ import matplotlib.patheffects as path_effects
 from PIL import Image
 
 st.set_page_config(page_title="Portfolio Merger", layout="centered")
+
+st.markdown("""<style>
+body {
+    background-color: #0e1117;
+    color: #ffffff;
+}
+h1, h2, h3, h4, h5, h6 {
+    color: #00ffe1;
+}
+.reportview-container .markdown-text-container {
+    color: #ffffff;
+}
+.stDataFrame, .stTable {
+    background-color: #1c1f26;
+    color: white;
+}
+.css-1d391kg, .css-qrbaxs, .css-ffhzg2 {
+    background-color: #1c1f26 !important;
+    color: white !important;
+}
+</style>""", unsafe_allow_html=True)
+
 st.title("📊 Portfolio Merger with P&L Summary + Chart")
 
 uploaded_files = st.file_uploader("Upload Portfolio Files (CSV/XLSX only)", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
@@ -136,7 +158,7 @@ if uploaded_files:
         img_buf = generate_summary_image()
         with open("summary_temp.png", "wb") as f_img:
             f_img.write(img_buf.read())
-        st.image("summary_temp.png", caption="📊 Portfolio Summary", use_column_width=True)
+        st.image("summary_temp.png", caption="📊 Portfolio Summary", use_container_width=True)
 
         # 📄 Generate and export PDF with image
         Image.open("summary_temp.png").save("summary_temp_converted.jpg")
