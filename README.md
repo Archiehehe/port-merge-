@@ -4,7 +4,9 @@ This app lets you upload multiple portfolio files (CSV/XLSX), combines them by t
 - Donut chart (top 5 + other)
 - PDF report (with embedded chart)
 - CSV, Excel, PNG export
+
 🚀 Launch App
+
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/Archiehehe/port-merge-/main/portfolio_csv_exporter.py)
 
 
