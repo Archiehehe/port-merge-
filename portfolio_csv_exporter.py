@@ -95,6 +95,67 @@ if uploaded_files:
 
         st.dataframe(combined, use_container_width=True)
 
+# 📘 Live summary box
+total = combined["value"].sum()
+invested = combined["invested"].sum()
+pnl = total - invested
+pnl_pct = (pnl / invested * 100) if invested else 0
+st.info(f"💰 **Total Value:** ${total:,.2f} | 🧾 **Invested:** ${invested:,.2f} | 📈 **P&L:** ${pnl:+,.2f} ({pnl_pct:.2f}%)")
+
+# 📸 Generate and show summary image
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
+from PIL import Image
+
+def generate_summary_image():
+    combined_sorted = combined.sort_values("value", ascending=False)
+    top = combined_sorted.head(5)
+    other_total = combined_sorted["value"].sum() - top["value"].sum()
+    if other_total > 0:
+        top = pd.concat([top, pd.DataFrame([{"symbol": "Other", "value": other_total}])], ignore_index=True)
+    labels = top["symbol"]
+    sizes = top["value"]
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
+    plt.style.use("dark_background")
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        labels=labels,
+        autopct="%1.1f%%",
+        startangle=140,
+        textprops=dict(color="white", fontsize=10, weight="bold"),
+        wedgeprops=dict(width=0.4)
+    )
+    for t in texts + autotexts:
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=2, foreground="black"),
+            path_effects.Normal()
+        ])
+    ax.text(0, 0.1, f"${total:,.0f}", ha="center", fontsize=18, color="cyan", weight="bold")
+    ax.text(0, -0.1, f"{pnl:+,.0f} ({pnl_pct:.2f}%)", ha="center", fontsize=12, color="lime" if pnl >= 0 else "red")
+    buf = BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png", transparent=True)
+    plt.close()
+    buf.seek(0)
+    return buf
+
+# Save image for preview & PDF
+img_buf = generate_summary_image()
+with open("summary_temp.png", "wb") as f_img:
+    f_img.write(img_buf.read())
+
+st.image("summary_temp.png", caption="📊 Portfolio Summary", use_container_width=True)
+
+# Save PDF with embedded chart
+img = Image.open("summary_temp.png").convert("RGB")
+img.save("summary_temp_converted.jpg")
+pdf = PDFReport()
+pdf_file = pdf.output_pdf(combined)
+pdf_name = f"archie_portfolio_{date.today()}.pdf"
+st.download_button("⬇️ Download PDF", pdf_file, pdf_name, mime="application/pdf")
+st.download_button("📸 Download Summary Image", open("summary_temp.png", "rb").read(), "portfolio_summary.png", "image/png")
+
+
         pdf = PDFReport()
         pdf_file = pdf.output_pdf(combined)
         st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", mime="application/pdf")
