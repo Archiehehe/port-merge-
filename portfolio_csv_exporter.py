@@ -1,6 +1,8 @@
 
 import pandas as pd
 import streamlit as st
+import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
 from datetime import date
 from io import BytesIO
 from fpdf import FPDF
@@ -9,12 +11,7 @@ import pdfplumber
 st.set_page_config(page_title="Portfolio Merger", layout="centered")
 st.title("📊 Portfolio Merger")
 
-st.markdown("""
-Upload multiple portfolios and combine everything.
-Supports `.csv`, `.xlsx`, `.xls`, `.pdf`
-""")
-
-export_format = st.selectbox("Output Format", ["Seeking Alpha Format", "Original Format (Cleaned)"])
+export_format = st.selectbox("Output Format", ["Seeking Alpha Format", "Original Format"])
 uploaded_files = st.file_uploader("Upload Portfolio Files", type=["xlsx", "xls", "csv", "pdf"], accept_multiple_files=True)
 purchase_date = st.date_input("Set Purchase Date (for Seeking Alpha export)", date.today())
 
@@ -32,6 +29,65 @@ def generate_pdf(df):
             pdf.cell(40, 10, str(val), border=1)
         pdf.ln()
     return BytesIO(pdf.output(dest='S').encode('latin1'))
+
+def generate_summary_image(df):
+    df = df.copy()
+    df = df[df['value'].notna()]
+    top5 = df.sort_values('value', ascending=False).head(5)
+    labels = top5['symbol']
+    sizes = top5['value']
+
+    total_value = df['value'].sum()
+    pnl_dollars = df['value'].sum() - df['invested'].sum()
+    pnl_percent = (pnl_dollars / df['invested'].sum()) * 100 if df['invested'].sum() else 0
+
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
+    plt.style.use("dark_background")
+
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        labels=labels,
+        autopct="%1.1f%%",
+        startangle=140,
+        textprops=dict(color="white", fontsize=10, weight="bold"),
+        wedgeprops=dict(width=0.4)
+    )
+
+    for t in texts + autotexts:
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=2, foreground='black'),
+            path_effects.Normal()
+        ])
+
+    ax.set_title("💼 Portfolio Summary", fontsize=16, weight='bold', color="white", pad=20)
+
+    value_text = ax.text(
+        0, 0.1, f"${total_value:,.0f}",
+        ha='center', va='center', fontsize=18, fontweight='bold',
+        color="cyan"
+    )
+    value_text.set_path_effects([
+        path_effects.Stroke(linewidth=3, foreground='black'),
+        path_effects.Normal()
+    ])
+
+    pnl_color = "lime" if pnl_dollars >= 0 else "red"
+    pnl_text = ax.text(
+        0, -0.1, f"{pnl_dollars:+,.0f} ({pnl_percent:.2f}%)",
+        ha='center', va='center', fontsize=13, fontweight='bold',
+        color=pnl_color
+    )
+    pnl_text.set_path_effects([
+        path_effects.Stroke(linewidth=2, foreground='black'),
+        path_effects.Normal()
+    ])
+
+    buffer = BytesIO()
+    plt.tight_layout()
+    plt.savefig(buffer, format="png", bbox_inches="tight", transparent=True)
+    plt.close()
+    buffer.seek(0)
+    return buffer
 
 def repair_pdf_headers(columns):
     joined = ' '.join(columns).replace('\n', ' ')
@@ -63,8 +119,6 @@ def extract_data(df):
     return df
 
 dataframes = []
-skipped_files = []
-skipped_tickers = []
 
 if uploaded_files:
     for file in uploaded_files:
@@ -88,34 +142,22 @@ if uploaded_files:
             if df is not None:
                 dataframes.append(df)
             else:
-                skipped_files.append(file.name)
+                st.warning(f"⚠️ Columns not found in {file.name}")
         except Exception as e:
-            skipped_files.append(file.name)
+            st.error(f"❌ Error reading {file.name}: {e}")
 
     if dataframes:
         combined = pd.concat(dataframes, ignore_index=True)
 
-        # Ticker-wise validation
-        original_tickers = combined['symbol'].nunique()
         combined = combined.groupby('symbol').agg({
             'quantity': 'sum',
             'cost': lambda x: (x * combined.loc[x.index, 'quantity']).sum() / combined.loc[x.index, 'quantity'].sum() if x.notna().any() and combined.loc[x.index, 'quantity'].notna().any() else None,
             'price': 'mean' if 'price' in combined.columns else 'first'
         }).reset_index()
 
-        final_tickers = combined['symbol'].nunique()
-        if final_tickers < original_tickers:
-            st.warning(f"⚠️ {original_tickers - final_tickers} tickers may have been skipped due to merge issues.")
-
         combined['invested'] = combined['quantity'] * combined['cost']
         if 'price' in combined.columns:
             combined['value'] = combined['quantity'] * combined['price']
-            if combined['value'].notna().any():
-                total_value = combined['value'].sum()
-                invested_total = combined['invested'].sum()
-                pnl = total_value - invested_total
-                pnl_pct = pnl / invested_total * 100 if invested_total else 0
-                st.info(f"💰 Total Value: ${total_value:,.2f} | Invested: ${invested_total:,.2f} | P&L: ${pnl:,.2f} ({pnl_pct:.2f}%)")
 
         base = ['symbol', 'quantity', 'cost']
         if export_format == "Seeking Alpha Format":
@@ -128,10 +170,11 @@ if uploaded_files:
 
         st.dataframe(combined[out], use_container_width=True)
 
-        st.download_button("⬇️ CSV", combined[out].to_csv(index=False).encode("utf-8"), "merged_pdf_safe.csv", "text/csv")
-        excel = BytesIO(); combined[out].to_excel(excel, index=False)
-        st.download_button("⬇️ Excel", excel.getvalue(), "merged_pdf_safe.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        st.download_button("⬇️ PDF", generate_pdf(combined[out]), "merged_pdf_safe.pdf", "application/pdf")
+        st.download_button("⬇️ CSV", combined[out].to_csv(index=False).encode("utf-8"), "merged_final.csv", "text/csv")
+        xlsx = BytesIO(); combined[out].to_excel(xlsx, index=False)
+        st.download_button("⬇️ Excel", xlsx.getvalue(), "merged_final.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.download_button("⬇️ PDF", generate_pdf(combined[out]), "merged_final.pdf", "application/pdf")
 
-    if skipped_files:
-        st.warning("Some files or tickers were skipped due to malformed structure: " + ", ".join(skipped_files))
+        if 'value' in combined.columns:
+            st.markdown("### 🖼️ Download Portfolio Summary Image")
+            st.download_button("📸 Summary Image (PNG)", generate_summary_image(combined), "portfolio_summary.png", "image/png")
