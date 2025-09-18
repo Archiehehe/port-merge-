@@ -128,7 +128,41 @@ if uploaded_files:
 
         # 📸 Generate and preview summary image
         
+
 def generate_summary_image():
+    combined_sorted = combined.sort_values("value", ascending=False)
+    top = combined_sorted.head(5)
+    other_total = combined_sorted["value"].sum() - top["value"].sum()
+    if other_total > 0:
+        other_row = pd.DataFrame([{"symbol": "Other", "value": other_total}])
+        top = pd.concat([top, other_row], ignore_index=True)
+    labels = top["symbol"]
+    sizes = top["value"]
+
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=150)
+    plt.style.use("dark_background")
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        labels=labels,
+        autopct="%1.1f%%",
+        startangle=140,
+        textprops=dict(color="white", fontsize=10, weight="bold"),
+        wedgeprops=dict(width=0.4)
+    )
+    for t in texts + autotexts:
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=2, foreground="black"),
+            path_effects.Normal()
+        ])
+    ax.text(0, 0.1, f"${total:,.0f}", ha="center", fontsize=18, color="cyan", weight="bold")
+    ax.text(0, -0.1, f"{pnl:+,.0f} ({pnl_pct:.2f}%)", ha="center", fontsize=12, color="lime" if pnl >= 0 else "red")
+    buf = BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png", transparent=True)
+    plt.close()
+    buf.seek(0)
+    return buf
+
     combined_sorted = combined.sort_values("value", ascending=False)
     top = combined_sorted.head(5)
     other_total = combined_sorted["value"].sum() - top["value"].sum()
