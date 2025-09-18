@@ -95,6 +95,14 @@ if uploaded_files:
 
         st.dataframe(combined, use_container_width=True)
 
+# Live P&L box
+total = combined["value"].sum()
+invested = combined["invested"].sum()
+pnl = total - invested
+pnl_pct = (pnl / invested * 100) if invested else 0
+st.info(f"💰 **Value:** ${total:,.2f} | 🧾 **Invested:** ${invested:,.2f} | 📈 **P&L:** ${pnl:+,.2f} ({pnl_pct:.2f}%)")
+
+
         pdf = PDFReport()
         pdf_file = pdf.output_pdf(combined)
         st.download_button("⬇️ Download PDF", pdf_file, "merged_portfolio.pdf", mime="application/pdf")
