@@ -7,7 +7,7 @@ This app lets you upload multiple portfolio files (CSV/XLSX), combines them by t
 
 🚀 Launch App
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/Archiehehe/port-merge-/main/portfolio_csv_exporter.py)
+archieportmerge.streamlit.app
 
 
 📁 Files Included
