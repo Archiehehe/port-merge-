@@ -1,4 +1,4 @@
-📊 Portfolio Merger (Streamlit App)
+📊 Portfolio Merger
 This app lets you upload multiple portfolio files (CSV/XLSX), combines them by ticker and outputs their quantity , avg cost price, capital invested and current value, along with
 - Live P&L summary
 - Donut chart (top 5 + other)
